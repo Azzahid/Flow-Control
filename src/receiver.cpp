@@ -103,7 +103,7 @@ void* consumerthread(void *threadArgs)
 			//front not in 0
 			if (rxq->front > 0) {
 				if (rxq->data[rxq->front-1] != Endfile && rxq->data[rxq->front-1] != CR && rxq->data[rxq->front-1] != LF) {
-					printf("Consuming byte %i: '%c'\n",++con,rxq->data[rxq->front-1]);
+					printf("Mengkonsumi byte ke-%d: '%c'\n",++con,rxq->data[rxq->front-1]);
 				} else if (rxq->data[rxq->front-1] == Endfile) {
 					//if endfile
 					printf("End of File accepted.\n");
@@ -111,7 +111,7 @@ void* consumerthread(void *threadArgs)
 				}
 			} else {
 				if (rxq->data[7] != Endfile && rxq->data[7] != CR && rxq->data[7] != LF) {
-					printf("Consuming byte %i: '%c'\n",++con,rxq->data[7]);
+					printf("Mengkonsumsi byte ke-%d: '%c'\n",++con,rxq->data[7]);
 				} else if (rxq->data[7] == Endfile) {
 					//if endfile
 					printf("End of File accepted.\n");
