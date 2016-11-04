@@ -1,5 +1,5 @@
 /*
-* File : T1_rx.cpp
+* File : receiver.c
 */
 #include <stdlib.h>
 #include <stdio.h>
@@ -50,45 +50,46 @@ Byte current_byte;
 
 int main( int argc, char *argv[])
 {
-	pthread_t consumert;
-	/*
-	Insert code here to bind socket to the port number given in argv[1].
-	*/
-	struct sockaddr_in myaddr;	/* our address */
+	if (argc < 2 || argc>2) {
+		printf("Usage : receiver [PORT]\n");
+	} else {
 	
-	/* create a UDP socket */
-	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-		perror("cannot create socket\n");
-		return 0;
-	}
-	
-	/* bind the socket to any valid IP address and a specific port */
-	int port = atoi(argv[1]);
-	memset((char *)&myaddr, 0, sizeof(myaddr));
-	myaddr.sin_family = AF_INET;
-	myaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	myaddr.sin_port = htons(port);
+		pthread_t consumert;
+		struct sockaddr_in myaddr;	/* our address */
+		
+		/* create a UDP socket */
+		if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+			perror("cannot create socket\n");
+			return 0;
+		}
+		
+		/* bind the socket to any valid IP address and a specific port */
+		int port = atoi(argv[1]);
+		memset((char *)&myaddr, 0, sizeof(myaddr));
+		myaddr.sin_family = AF_INET;
+		myaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+		myaddr.sin_port = htons(port);
 
-	if (bind(sockfd, (struct sockaddr *)&myaddr, sizeof(myaddr)) < 0) {
-		perror("bind failed");
+		if (bind(sockfd, (struct sockaddr *)&myaddr, sizeof(myaddr)) < 0) {
+			perror("bind failed");
+			return 0;
+		}
+		
+		printf("Binding pada %s:%d\n ...", inet_ntoa(myaddr.sin_addr) , port);
+		
+		/* Membuat thread baru */
+		pthread_create(&consumert,NULL,consumerthread,NULL);
+		
+		/*** Main Thread Code ***/
+		while(true) {
+			//read byte from socket
+			current_byte = *(rcvchar(sockfd, rxq));
+		}
+		
+		//close socket
+		close(sockfd);
 		return 0;
 	}
-	
-	printf("Binding pada %s:%d\n ...", inet_ntoa(myaddr.sin_addr) , port);
-	
-	/* Membuat thread baru */
-	pthread_create(&consumert,NULL,consumerthread,NULL);
-	
-	/*** Main Thread Code ***/
-	while(true) {
-		//read byte from socket
-		current_byte = *(rcvchar(sockfd, rxq));
-	}
-	
-	//close socket
-	close(sockfd);
-	return 0;
-	
 }
 
 /*** Consumer Thread Code ***/
