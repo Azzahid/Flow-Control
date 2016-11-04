@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <netdb.h>
+#include <pthread.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include "dcomm.h"
@@ -33,6 +34,8 @@ Boolean send_xon = falsey , send_xoff = falsey ;
 /* Socket */
 int sockfd; // listen on sock_fd
 
+void* consumerthread(void *threadArgs);
+
 struct sockaddr_in remaddr;	/* remote address */
 socklen_t addrlen = sizeof(remaddr);		/* length of addresses */
 
@@ -47,8 +50,7 @@ Byte current_byte;
 
 int main( int argc, char *argv[])
 {
-	Byte c;
-	
+	pthread_t consumert;
 	/*
 	Insert code here to bind socket to the port number given in argv[1].
 	*/
@@ -71,21 +73,29 @@ int main( int argc, char *argv[])
 		perror("bind failed");
 		return 0;
 	}
+	
 	printf("Binding pada %s:%d\n ...", inet_ntoa(myaddr.sin_addr) , port);
 	
+	/* Membuat thread baru */
+	pthread_create(&consumert,NULL,consumerthread,NULL);
 	
+	/*** Main Thread Code ***/
+	while(true) {
+		//read byte from socket
+		current_byte = *(rcvchar(sockfd, rxq));
+	}
 	
-	/* Initialize XON/XOFF flags */
+	//close socket
+	close(sockfd);
+	return 0;
 	
-	/* Create child process */
-	pid_t pid = fork();
-	
-	if (pid == 0)
-    {
-        // child process
-        printf("child process\n");
-        while(true) {
-			//consume thread
+}
+
+/*** Consumer Thread Code ***/
+void* consumerthread(void *threadArgs)
+{
+	while (true) {
+		//consume thread
 		Byte * test = q_get(rxq,&current_byte);
 		
 		//if count > 0
@@ -111,35 +121,8 @@ int main( int argc, char *argv[])
 		}
 		//delay
 		usleep(DELAY*1000);
-		}
-    }
-    else if (pid > 0)
-    {
-        /*** IF PARENT PROCESS ***/
-		int count = 1;
-		while ( true ) {
-			c = *(rcvchar(sockfd, rxq));
-			printf("Menerima byte ke-%d.\n", count);
-			/* Quit on end of file */
-			if (c == Endfile) {
-				exit(0);
-			}
-			count++;
-		}
-    }
-    else
-    {
-        // fork failed
-        printf("fork() failed!\n");
-        return 1;
-    }
-	
-	
-	/*** ELSE IF CHILD PROCESS ***/
-	while ( true ) {
-		/* Call q_get */
-		/* Can introduce some delay here. */
 	}
+	return NULL;
 }
 
 Byte tes[2];
@@ -152,7 +135,7 @@ static Byte *rcvchar( int sockfd, QTYPE *queue)
 			
 		if (numBytesRcvd < 0) {
 			//if error
-			printf("recvfrom() failed\n");
+			printf("recvfrom() gagal!\n");
 		} else {
 			//fill the circular
 			queue->data[queue->rear] = tes[0];
@@ -166,7 +149,7 @@ static Byte *rcvchar( int sockfd, QTYPE *queue)
 		}
 		
 		if (tes[0] != Endfile && tes[0] != CR && tes[0] != LF) {
-			printf("Received byte %i\n",co);
+			printf("Menerima byte ke-%d.\n",co);
 		}
 		
 		//if buffer size excess minimum upperlimit
@@ -174,14 +157,14 @@ static Byte *rcvchar( int sockfd, QTYPE *queue)
 			sent_xonxoff = XOFF;
 			send_xoff = truey;
 			send_xon = falsey;
-			printf("Buffer > minimum upperlimit. Send XOFF.\n");
+			printf("Buffer > minimum upperlimit.\n Mengirim XOFF.\n");
 			char test[2];
 			test[0] = XOFF;
 			//send XOFF to transmitter
 			ssize_t numBytesSent = sendto(sockfd, test, sizeof(test), 4,
 				(struct sockaddr *) &remaddr, sizeof(remaddr));
 			if (numBytesSent < 0)
-				printf("sendto() failed)");
+				printf("sendto() gagal!");
 		}
 		
 		return &tes[0];
@@ -220,14 +203,14 @@ static Byte *q_get(QTYPE *queue, Byte *data)
 			sent_xonxoff = XON;
 			send_xon = truey;
 			send_xoff = falsey;
-			printf("Buffer < maksimum lowerlimit. Send XON\n");
+			printf("Buffer < maksimum lowerlimit.\n Mengirim XON.\n");
 			char test[2];
 			test[0] = XON;
 			//send XON to transmitter
 			ssize_t numBytesSent = sendto(sockfd, test, sizeof(test), 4,
 			(struct sockaddr *) &remaddr, sizeof(remaddr));
 			if (numBytesSent < 0)
-				printf("sendto() failed\n");
+				printf("sendto() gagal!\n");
 		}
 		
 		return data;
