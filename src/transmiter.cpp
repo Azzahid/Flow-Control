@@ -12,8 +12,15 @@
 #include <iostream> // cin cout
 #include <fstream> // ifstream
 #include "dcomm.h"
+#include <pthread.h>
+#include <signal.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 using namespace std;
+
+bool status = false;
+char x[2];
 
 int main(int argc, char *argv[])
 {
@@ -22,12 +29,14 @@ int main(int argc, char *argv[])
 	} else {
 		struct sockaddr_in myaddr, remaddr;
 		int fd, i, slen=sizeof(remaddr);
-		char *server = argv[0];	
+		char *server = argv[1];	
+		cout << server ;
 		char buf[MAXLEN];
-		int port = atoi(argv[1]);
-		string text_file = argv[2];
+		int port = atoi(argv[2]);
+		string text_file = argv[3];
+		socklen_t addrlen = sizeof(remaddr);
 		
-		printf("Membuat socket untuk koneksi ke %s:%d ...",server,port);
+		printf("Membuat socket untuk koneksi ke %s:%d ...\n",server,port);
 		/* Create a Socket */
 		if ((fd=socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
 			perror("cannot create socket\n");
@@ -66,9 +75,30 @@ int main(int argc, char *argv[])
 		if (pid == 0)
 		{
 			// child process
-			printf("child process\n");
-			while(true) {
-				
+	        while ( true ) {
+			/* Call q_get */
+			    struct timeval t;
+			    t.tv_sec = 0;
+			    t.tv_usec = 200000;
+				if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO,&t,sizeof(t)) < 0) {
+				    perror("Error");
+				}
+				if(recvfrom(fd, x, sizeof(x), 0, (struct sockaddr *)&remaddr, &addrlen)>0){
+					if(*x==XOFF){
+						printf("XOFF Diterima\n");
+						while(true){
+							if(recvfrom(fd,x,sizeof(x), 0, (struct sockaddr *)&remaddr, &addrlen)>0){
+								if(*x == XON){
+									printf("XON Diterima\n");
+									break;
+								}
+							}else{
+								printf("Menunggu XON...\n");
+							}
+						}
+					}
+				}
+				raise(SIGSTOP);
 			}
 		}
 		else if (pid > 0)
@@ -77,10 +107,18 @@ int main(int argc, char *argv[])
 			ifstream infile;
 			infile.open(text_file.c_str());
 			char c;
+			int count = 1;
 			while (infile.get(c)) {
-				
+				waitpid(pid,NULL,WUNTRACED);
+				Byte * cx = new Byte(static_cast<unsigned char>(c));
+				sendto(fd, cx, sizeof(cx),0,(struct sockaddr *)&remaddr, slen);
+				cout << "Mengirim byte ke-"<<count<<": '"<<c<<"'\n";
+				count++;
+				kill(pid,SIGCONT);
 			}
 			infile.close();
+			Byte * cx = new Byte(Endfile);
+			sendto(fd, cx, sizeof(cx),0,(struct sockaddr *)&remaddr, slen);
 		}
 		else
 		{
