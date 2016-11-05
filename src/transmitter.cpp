@@ -24,7 +24,7 @@ char x[2];
 
 int main(int argc, char *argv[])
 {
-	if (argc < 3 || argc > 4) {
+	if (argc < 4 || argc > 4) {
 		printf("Usage : transmitter [IP Target] [Port Target] [File to Send]");
 	} else {
 		struct sockaddr_in myaddr, remaddr;

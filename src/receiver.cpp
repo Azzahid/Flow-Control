@@ -1,5 +1,7 @@
 /*
 * File : receiver.c
+* Source and edit from : https://github.com/masphei/flow-control-udp/blob/c1e4cd9e7b18a04e5d0465f007c74142c8b75a5b/Control.c 
+* Reference source code credit to : masphei
 */
 #include <stdlib.h>
 #include <stdio.h>
@@ -20,10 +22,8 @@
 /* Define minimum upperlimit */
 #define MIN_UPPERLIMIT 4
 
-
 /* Define maximum lowerlimit */
 #define MAX_LOWERLIMIT 1
-
 
 Byte rxbuf[RXQSIZE];
 QTYPE rcvq = { 0, 0, 0, RXQSIZE, rxbuf };
