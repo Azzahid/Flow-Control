@@ -30,7 +30,6 @@ int main(int argc, char *argv[])
 		struct sockaddr_in myaddr, remaddr;
 		int fd, i, slen=sizeof(remaddr);
 		char *server = argv[1];	
-		cout << server ;
 		char buf[MAXLEN];
 		int port = atoi(argv[2]);
 		string text_file = argv[3];
