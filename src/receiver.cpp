@@ -108,7 +108,7 @@ void* consumerthread(void *threadArgs)
 				} else if (rxq->data[rxq->front-1] == Endfile) {
 					//if endfile
 					printf("End of File accepted.\n");
-					exit(0);
+					//exit(0);
 				}
 			} else {
 				if (rxq->data[7] != Endfile && rxq->data[7] != CR && rxq->data[7] != LF) {
@@ -116,7 +116,7 @@ void* consumerthread(void *threadArgs)
 				} else if (rxq->data[7] == Endfile) {
 					//if endfile
 					printf("End of File accepted.\n");
-					exit(0);
+					//exit(0);
 				}
 			}
 		}
@@ -152,14 +152,13 @@ static Byte *rcvchar( int sockfd, QTYPE *queue)
 		if (tes[0] != Endfile && tes[0] != CR && tes[0] != LF) {
 			printf("Menerima byte ke-%d.\n",co);
 		}
-		
+		char test[2];
 		//if buffer size excess minimum upperlimit
 		if (queue->count > MIN_UPPERLIMIT && sent_xonxoff == XON) {
 			sent_xonxoff = XOFF;
 			send_xoff = truey;
 			send_xon = falsey;
 			printf("Buffer > minimum upperlimit.\n Mengirim XOFF.\n");
-			char test[2];
 			test[0] = XOFF;
 			//send XOFF to transmitter
 			ssize_t numBytesSent = sendto(sockfd, test, sizeof(test), 4,
@@ -167,7 +166,12 @@ static Byte *rcvchar( int sockfd, QTYPE *queue)
 			if (numBytesSent < 0)
 				printf("sendto() gagal!");
 		}
-		
+		printf("Mengirim ACK.\n");
+		test[0] = ACK;
+		ssize_t numBytesSent = sendto(sockfd, test, sizeof(test), 4,
+				(struct sockaddr *) &remaddr, sizeof(remaddr));
+		if (numBytesSent < 0)
+			printf("sendto() gagal!");
 		return &tes[0];
 		
 	} else {

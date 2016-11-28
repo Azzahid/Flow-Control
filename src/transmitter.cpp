@@ -16,12 +16,14 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-
+#include <string> //std::string
+#include <vector>
+#include <sys/mman.h>
 using namespace std;
 
 bool status = false;
 char x[2];
-
+static int *acknowledged;
 int main(int argc, char *argv[])
 {
 	if (argc < 4 || argc > 4) {
@@ -34,7 +36,10 @@ int main(int argc, char *argv[])
 		int port = atoi(argv[2]);
 		string text_file = argv[3];
 		socklen_t addrlen = sizeof(remaddr);
-		
+		string isifile ("");
+		std::vector<string> frame;
+		char *ack;
+
 		printf("Membuat socket untuk koneksi ke %s:%d ...\n",server,port);
 		/* Create a Socket */
 		if ((fd=socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -63,14 +68,16 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "inet_aton() failed\n");
 			exit(1);
 		}
-		
+		int kx = 0;
+		acknowledged =(int *) mmap(NULL, sizeof *acknowledged, PROT_READ | PROT_WRITE, 
+                    MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 		/* now let's send the messages */
-
+		*acknowledged = 1;
 		/* Initialize XON/XOFF flags */
 	
 		/* Create child process */
 		pid_t pid = fork();
-		
+
 		if (pid == 0)
 		{
 			// child process
@@ -78,13 +85,14 @@ int main(int argc, char *argv[])
 			/* Call q_get */
 			    struct timeval t;
 			    t.tv_sec = 0;
-			    t.tv_usec = 200000;
+			    t.tv_usec = 100000;
 				if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO,&t,sizeof(t)) < 0) {
 				    perror("Error");
 				}
 				if(recvfrom(fd, x, sizeof(x), 0, (struct sockaddr *)&remaddr, &addrlen)>0){
 					if(*x==XOFF){
 						printf("XOFF Diterima\n");
+						*acknowledged = 0;
 						while(true){
 							if(recvfrom(fd,x,sizeof(x), 0, (struct sockaddr *)&remaddr, &addrlen)>0){
 								if(*x == XON){
@@ -92,8 +100,18 @@ int main(int argc, char *argv[])
 									break;
 								}
 							}else{
+								//sleep(10);
 								printf("Menunggu XON...\n");
 							}
+						}
+					}else{
+						if(*x==ACK){
+							*acknowledged = 0;
+							if(*acknowledged==0){
+								printf("ACK Diterima...\n");
+							}
+						}else if (*x == NAK){
+							*acknowledged = 1;
 						}
 					}
 				}
@@ -108,16 +126,23 @@ int main(int argc, char *argv[])
 			char c;
 			int count = 1;
 			while (infile.get(c)) {
-				waitpid(pid,NULL,WUNTRACED);
-				Byte * cx = new Byte(static_cast<unsigned char>(c));
-				sendto(fd, cx, sizeof(cx),0,(struct sockaddr *)&remaddr, slen);
-				cout << "Mengirim byte ke-"<<count<<": '"<<c<<"'\n";
+				while(*acknowledged==1){
+					waitpid(pid,NULL,WUNTRACED);
+					Byte * cx = new Byte(static_cast<unsigned char>(c));
+					sendto(fd, cx, sizeof(cx),0,(struct sockaddr *)&remaddr, slen);
+					cout << "Mengirim byte ke-"<<count<<": '"<<c<<"'\n";
+					kill(pid,SIGCONT);
+					waitpid(pid,NULL,WUNTRACED);
+					kill(pid,SIGCONT);
+				}
 				count++;
-				kill(pid,SIGCONT);
+				*acknowledged=1;
 			}
+			munmap(acknowledged, sizeof *acknowledged);
 			infile.close();
 			Byte * cx = new Byte(Endfile);
 			sendto(fd, cx, sizeof(cx),0,(struct sockaddr *)&remaddr, slen);
+			
 		}
 		else
 		{
@@ -125,6 +150,12 @@ int main(int argc, char *argv[])
 			printf("fork() failed!\n");
 			return 1;
 		}
+		for(int i = 0; i<frame.size();i++){
+				cout << frame[i] << endl;
+		}	
+		//cout << frame[0] << endl;
+		//cout << isifile << isifile.length() << endl;
 	}
 	return 0;
 }
+
