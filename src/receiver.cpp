@@ -259,13 +259,13 @@ static Byte *rcvchar( int sockfd, QTYPE *queue)
 				}
 				
 				if (tes[0] != Endfile && tes[0] != CR && tes[0] != LF) {
-					//printf("Menerima frame ke-");
+					printf("\nMenerima frame ke-");
 					for (int i= 0; i<framenum.size();i++){
 						if(faultframe[i]){
 							cout << framenum[i] << " ";
 						}
 					}
-					//cout << endl;
+					cout << endl;
 				}
 				char test[2];
 				vector<string> ack;
@@ -283,8 +283,8 @@ static Byte *rcvchar( int sockfd, QTYPE *queue)
 					sendingack = sendingack.append(ack[i]);
 				}
 				sendingack.push_back('\0');
-				cout << sendingack <<endl;
-				//printf("Mengirim ACK.\n");
+				//cout << sendingack <<endl;
+				printf("Mengirim ACK.\n\n");
 				ssize_t numBytesSent = sendto(sockfd, sendingack.data(), sendingack.size(), 4,
 						(struct sockaddr *) &remaddr, sizeof(remaddr));
 				if (numBytesSent < 0)
@@ -294,7 +294,7 @@ static Byte *rcvchar( int sockfd, QTYPE *queue)
 					sent_xonxoff = XOFF;
 					send_xoff = truey;
 					send_xon = falsey;
-					printf("Buffer > minimum upperlimit.\n Mengirim XOFF.\n");
+					printf("Buffer > minimum upperlimit.\nMengirim XOFF.\n");
 					test[0] = XOFF;
 					//send XOFF to transmitter
 					ssize_t numBytesSent = sendto(sockfd, test, sizeof(test), 4,
@@ -304,7 +304,7 @@ static Byte *rcvchar( int sockfd, QTYPE *queue)
 				}
 				Byte *rt;
 				rt = stringToArrayOfBytes(acknowledged);
-				cout << rt << ", fish, " << queue->count << endl;
+				//cout << rt << ", fish, " << queue->count << endl;
 				return rt;
 			}else{
 				queue->data[queue->rear] = tes[i];

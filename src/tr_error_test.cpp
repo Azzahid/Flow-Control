@@ -166,6 +166,7 @@ int main(int argc, char *argv[])
 				sumarray[m] = to_string(tmpsum);
 				//cout <<"isi tmp " << tmp << endl;
 			}
+			sumarray[10] = "12";
 			//make message
 			for(int m=0; m<totalframe;m++){
 				msg[m].push_back(SOH);
@@ -177,7 +178,7 @@ int main(int argc, char *argv[])
 				// cout << msg[m] << endl;
 
 			}
-			
+
 
 	/*		for(int i = 0; i<totalframe;i++){
 				cout << arrframe[i] << endl;
@@ -258,11 +259,24 @@ int main(int argc, char *argv[])
 						}
 						for(i = 0; i<faultframe.size();i++){
 							if(!faultframe[i]){
-								datas.append(msg[faultnum[i]]);
+								msg[faultnum[i]-1] = "";
+								Byte * tmpx;
+								unsigned tmpsumx;
+								tmpx = stringToArrayOfBytes(arrframe[faultnum[i]-1]);
+								tmpsumx = checksum(tmpx, arrframe[faultnum[i]-1].length(),0);
+								sumarray[faultnum[i]-1] = to_string(tmpsumx);
+								msg[faultnum[i]-1].push_back(SOH);
+								msg[faultnum[i]-1].append(to_string(faultnum[i]-1+1));
+								msg[faultnum[i]-1].push_back(STX);
+								msg[faultnum[i]-1].append(arrframe[faultnum[i]-1]);
+								msg[faultnum[i]-1].push_back(ETX);
+								msg[faultnum[i]-1].append(sumarray[faultnum[i]-1]);
+								datas.append(msg[faultnum[i]-1]);
 								cout << faultnum[i] << " ";
 							}
 							ack[faultnum[i]-1] = faultframe[i];
 						}
+						cout << datas;
 						if(!checkack(faultframe)){
 							cout << endl;
 						}
@@ -277,7 +291,7 @@ int main(int argc, char *argv[])
 						cout << "Timeout: send all" <<endl;
 					}
 					if(datas.size()>1){
-						//cout << "Sending window" << datas << endl;
+						cout << "Sending window" << datas << endl;
 						if(sendto(fd, datas.data(), datas.size(),0,(struct sockaddr *)&remaddr, slen)<0){
 							cout << "error" << endl;
 						}
@@ -285,8 +299,8 @@ int main(int argc, char *argv[])
 					if(checkack(ack)){
 						break;
 					}
-					// int axs;
-					// cin >> axs;
+					int axs;
+					cin >> axs;
 				}
 				kill(pid,SIGCONT);
 				//cek ack
