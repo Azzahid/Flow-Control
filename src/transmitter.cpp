@@ -21,9 +21,18 @@
 #include <sys/mman.h>
 using namespace std;
 
+typedef unsigned char      byte;    // Byte is a char
+typedef unsigned short int word16;  // 16-bit word is a short int
+typedef unsigned int       word32;
+
+bool checkack(std::vector<bool> ack);
+unsigned checksum(void *buffer, size_t len, unsigned int seed);
+Byte * stringToArrayOfBytes(string a);
+
 bool status = false;
 char x[2];
 static int *acknowledged;
+int totalframe;
 int main(int argc, char *argv[])
 {
 	if (argc < 4 || argc > 4) {
@@ -37,8 +46,8 @@ int main(int argc, char *argv[])
 		string text_file = argv[3];
 		socklen_t addrlen = sizeof(remaddr);
 		string isifile ("");
-		std::vector<string> frame;
 		char *ack;
+		int windowsize;
 
 		printf("Membuat socket untuk koneksi ke %s:%d ...\n",server,port);
 		/* Create a Socket */
@@ -69,12 +78,17 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
 		int kx = 0;
-		acknowledged =(int *) mmap(NULL, sizeof *acknowledged, PROT_READ | PROT_WRITE, 
-                    MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-		/* now let's send the messages */
-		*acknowledged = 1;
 		/* Initialize XON/XOFF flags */
-	
+
+		 //sending request for windowsize.
+		cout << "\nSending request for window size.\n" << endl;
+ 		sendto(fd,"REQUEST FOR WINDOWSIZE.",sizeof("REQUEST FOR WINDOWSIZE."),0,(struct sockaddr*)&remaddr,slen);
+
+		//obtaining windowsize.
+		printf("\nWaiting for the windowsize.\n");
+		recvfrom(fd,(int*)&windowsize,sizeof(windowsize),0,(sockaddr*)&remaddr,&addrlen);
+		printf("\nThe windowsize obtained as:\t%d\n",windowsize);
+		//windowsize = 3;
 		/* Create child process */
 		pid_t pid = fork();
 
@@ -85,14 +99,14 @@ int main(int argc, char *argv[])
 			/* Call q_get */
 			    struct timeval t;
 			    t.tv_sec = 0;
-			    t.tv_usec = 100000;
+			    t.tv_usec = 300000;
 				if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO,&t,sizeof(t)) < 0) {
 				    perror("Error");
 				}
 				if(recvfrom(fd, x, sizeof(x), 0, (struct sockaddr *)&remaddr, &addrlen)>0){
 					if(*x==XOFF){
 						printf("XOFF Diterima\n");
-						*acknowledged = 0;
+						int asd = recvfrom(fd, x, sizeof(x), 0, (struct sockaddr *)&remaddr, &addrlen);
 						while(true){
 							if(recvfrom(fd,x,sizeof(x), 0, (struct sockaddr *)&remaddr, &addrlen)>0){
 								if(*x == XON){
@@ -104,18 +118,9 @@ int main(int argc, char *argv[])
 								printf("Menunggu XON...\n");
 							}
 						}
-					}else{
-						if(*x==ACK){
-							*acknowledged = 0;
-							if(*acknowledged==0){
-								printf("ACK Diterima...\n");
-							}
-						}else if (*x == NAK){
-							*acknowledged = 1;
-						}
 					}
 				}
-				raise(SIGSTOP);
+				raise(SIGSTOP);		
 			}
 		}
 		else if (pid > 0)
@@ -124,23 +129,173 @@ int main(int argc, char *argv[])
 			ifstream infile;
 			infile.open(text_file.c_str());
 			char c;
-			int count = 1;
+			int count = 0;
+			string frame("");
 			while (infile.get(c)) {
-				while(*acknowledged==1){
-					waitpid(pid,NULL,WUNTRACED);
-					Byte * cx = new Byte(static_cast<unsigned char>(c));
-					sendto(fd, cx, sizeof(cx),0,(struct sockaddr *)&remaddr, slen);
-					cout << "Mengirim byte ke-"<<count<<": '"<<c<<"'\n";
-					kill(pid,SIGCONT);
-					waitpid(pid,NULL,WUNTRACED);
-					kill(pid,SIGCONT);
+				if(c != EOF){
+					frame.push_back(c);
 				}
-				count++;
-				*acknowledged=1;
 			}
+			//cout << frame << frame.length() << endl;
+			totalframe = (frame.length()+framesize-1)/framesize;
+			//cout << totalframe << endl;
+			string arrframe[totalframe];
+			string msg[totalframe];
+			string sumarray[totalframe];
+			std::vector<bool> ack;
+			for(int m=0; m<totalframe;m++){
+				ack.push_back(false);
+			}
+			//make data frame
+			string temp("");
+			for(int m=0; m<frame.length(); m++){
+				temp.push_back(frame[m]);
+				if(temp.length() == framesize || m == frame.length()-1){
+					arrframe[count] = temp;
+					//cout << arrframe[count] << endl;
+					temp = "";
+					count++;
+				}
+			}
+			//make sumarray
+			Byte * tmp;
+			unsigned tmpsum;
+			for(int m =0; m<totalframe;m++){
+				tmp = stringToArrayOfBytes(arrframe[m]);
+				tmpsum = checksum(tmp, arrframe[m].length(),0);
+				sumarray[m] = to_string(tmpsum);
+				//cout <<"isi tmp " << tmp << endl;
+			}
+			//make message
+			for(int m=0; m<totalframe;m++){
+				msg[m].push_back(SOH);
+				msg[m].append(to_string(m+1));
+				msg[m].push_back(STX);
+				msg[m].append(arrframe[m]);
+				msg[m].push_back(ETX);
+				msg[m].append(sumarray[m]);
+				// cout << msg[m] << endl;
+
+			}
+
+	/*		for(int i = 0; i<totalframe;i++){
+				cout << arrframe[i] << endl;
+				cout << arrframe[i].size() << endl;
+				//cout << sumarray[i]<<endl;
+ 			}	
+*/
+			int framenum = 0;
+			string nakfile;
+			int m=0;
+			while(!checkack(ack)){//paket masih belum di ack semua
+				waitpid(pid,NULL,WUNTRACED);
+				int numinit = framenum;
+				count = 0;
+				//make the frame
+				string a; 
+				while(count<windowsize){
+					if(framenum<totalframe){
+						a.append(msg[framenum]);
+					}
+					count++;
+					framenum++;
+				}
+				a.push_back('\0');
+				cout << "Sending window" << a << endl;
+				if(sendto(fd, a.data(), a.size(),0,(struct sockaddr *)&remaddr, slen)<0){
+					cout << "error" << endl;
+				}
+				//send frame
+				//wait ack
+				Byte x [5*windowsize];
+				struct timeval t;
+			    if(framenum-1 <= windowsize)
+			    	sleep(3);
+				vector<bool> faultframe;
+				faultframe.push_back(false);
+				while(!checkack(faultframe)){
+					faultframe.clear();
+					vector<int> faultnum;
+					string datas;
+					t.tv_sec = 3;
+				    t.tv_usec = 0;
+					if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO,&t,sizeof(t)) < 0) {
+					    perror("Error");
+					}
+					ssize_t ackrecv = 1;
+					ackrecv = recvfrom(fd,x,sizeof(x), 0, (struct sockaddr *)&remaddr, &addrlen);
+						cout << x << endl;	
+					if(ackrecv>0){
+						int i =0;
+						while(i<sizeof(x)){
+							//cout << x <<endl;
+							if(x[i]=='\0'){
+								break;
+							}else if(x[i]==NAK || x[i]==ACK){
+								cout << x << endl;
+								if(x[i]==ACK){
+									faultframe.push_back(true);
+								}else{
+									faultframe.push_back(false);
+								}
+								i++;
+								string temp("");
+								while(x[i]!=NAK && x[i]!=ACK && x[i]!='\0'){
+									temp.push_back(x[i]);
+									i++;
+								}
+								faultnum.push_back(stoi(temp));
+								count++;
+							}else if (x[i] == Endfile){
+								break;
+							}else{
+								i++;
+								perror("Format is wrong sending quiting");
+								exit(0);
+							}
+						}
+						for(i = 0; i<faultframe.size();i++){
+							if(!faultframe[i]){
+								datas.append(msg[faultnum[i]]);
+							}
+							ack[faultnum[i]-1] = faultframe[i];
+						}
+					}else if(ackrecv<0){
+						for(i = numinit; i<framenum;i++){
+							if(i < totalframe){
+								datas.append(msg[i]);
+							}
+						}
+						faultframe.push_back(false);
+						cout << "cat" <<endl;
+					}
+					if(datas.size()>1){
+						//cout << "Sending window" << datas << endl;
+						if(sendto(fd, datas.data(), datas.size(),0,(struct sockaddr *)&remaddr, slen)<0){
+							cout << "error" << endl;
+						}
+					}
+					if(checkack(ack)){
+						break;
+					}
+					// int axs;
+					// cin >> axs;
+				}
+				kill(pid,SIGCONT);
+				//cek ack
+				//break;
+			}
+			/*waitpid(pid,NULL,WUNTRACED);
+			Byte * cx = new Byte(static_cast<unsigned char>(c));
+			sendto(fd, cx, sizeof(cx),0,(struct sockaddr *)&remaddr, slen);
+			cout << "Mengirim byte ke-"<<count<<": '"<<c<<"'\n";
+			kill(pid,SIGCONT);
+			waitpid(pid,NULL,WUNTRACED);
+			kill(pid,SIGCONT);
+			count++;
 			munmap(acknowledged, sizeof *acknowledged);
-			infile.close();
-			Byte * cx = new Byte(Endfile);
+			infile.close();*/
+			Byte *cx = new Byte(Endfile);
 			sendto(fd, cx, sizeof(cx),0,(struct sockaddr *)&remaddr, slen);
 			
 		}
@@ -150,12 +305,40 @@ int main(int argc, char *argv[])
 			printf("fork() failed!\n");
 			return 1;
 		}
-		for(int i = 0; i<frame.size();i++){
-				cout << frame[i] << endl;
-		}	
+		
 		//cout << frame[0] << endl;
 		//cout << isifile << isifile.length() << endl;
 	}
 	return 0;
 }
 
+bool checkack(std::vector<bool> ack){
+	for(int i =0; i<ack.size(); i++){
+		if(!ack[i]){
+			cout << "false" << i <<endl;
+			return false;
+		}
+		//cout << "true, " << i <<endl;
+	}
+	return true;
+}
+
+unsigned checksum(void *buffer, size_t len, unsigned int seed)
+{
+      unsigned char *buf = (unsigned char *)buffer;
+      size_t i;
+
+      for (i = 0; i < len; ++i)
+            seed += (unsigned int)(*buf++);
+      return seed;
+}
+
+Byte * stringToArrayOfBytes(string a){
+	//cout << a << endl;
+	Byte * result = new Byte[a.length()+1];
+	for(int i = 0; i<a.length();i++){
+		result[i] = a[i];
+	}
+	result[a.length()]= '\0';  
+	return result;
+}
