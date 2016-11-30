@@ -43,6 +43,7 @@ int sockfd; // listen on sock_fd
 void* consumerthread(void *threadArgs);
 unsigned checksum(void *buffer, size_t len, unsigned int seed);
 Byte * stringToArrayOfBytes(string a);
+bool checkack(std::vector<bool> ack);
 
 struct sockaddr_in remaddr;	/* remote address */
 socklen_t addrlen = sizeof(remaddr);		/* length of addresses */
@@ -163,165 +164,201 @@ static Byte *rcvchar( int sockfd, QTYPE *queue)
 	vector<string> data;
 	vector<unsigned> sumarray;
 	vector<bool> faultframe;
+	vector<string> databelumdiack;
+	vector<int>framenumbelumdiack;
+	vector<unsigned> sumarraybelumdiack;
+	vector<bool> faultframebelumdiack;
 
 	if (!send_xoff) {
-		//read from socket & push it to queue
-		bzero((char*)tes,sizeof(tes));
-		ssize_t numBytesRcvd = recvfrom(sockfd, tes, sizeof(tes), 0,(struct sockaddr *) &remaddr, &addrlen);
-		//process data from vector
-		//cout << tes << endl;
-		
-//		cou//cek data
-		int count = 0;
-		int i = 0;
-		bool format = true;
-		//get data to array
-		while(i<sizeof(tes)){
-			if(tes[i]=='\0'){
-				break;
-			}else if(tes[i]==SOH){
-				i++;
-				string numtemp;
-				while(tes[i]!=STX){
-					numtemp.push_back(tes[i]);
-					//cout << tes[i] <<", "<< i << endl;
+		//vector<bool> faultframe;
+		databelumdiack.clear();
+		framenumbelumdiack.clear();
+		sumarraybelumdiack.clear();
+		faultframebelumdiack.clear();
+		faultframe.push_back(false);
+		while(!checkack(faultframe)){
+			//read from socket & push it to queue
+			bzero((char*)tes,sizeof(tes));
+			ssize_t numBytesRcvd = recvfrom(sockfd, tes, sizeof(tes), 0,(struct sockaddr *) &remaddr, &addrlen);
+			//process data from vector
+			int count = 0;
+			int i = 0;
+			bool format = true;
+			framenum.clear();
+			data.clear();
+			sumarray.clear();
+			faultframe.clear();
+			//databelumdiack.clear();
+			//framenumbelumdiack.clear();
+			//sumarraybelumdiack.clear();
+			//faultframebelumdiack.clear();
+			//get data to array
+			while(i<sizeof(tes)){
+				if(tes[i]=='\0'){
+					break;
+				}else if(tes[i]==SOH){
 					i++;
-				}
-				framenum.push_back(stoi(numtemp));
-				//cout << numtemp << endl;
-				i++;
-				string datatemp;
-				while(tes[i]!=ETX){
-					datatemp.push_back(tes[i]);
-					//cout << tes[i] << ", "<< i << endl;
+					string numtemp;
+					while(tes[i]!=STX){
+						numtemp.push_back(tes[i]);
+						i++;
+					}
+					framenum.push_back(stoi(numtemp));
 					i++;
-				}
-				data.push_back(datatemp);
-				i++;
-				string sumtemp;
-				while(tes[i]!=SOH && tes[i]!='\0'){
-					sumtemp.push_back(tes[i]);
+					string datatemp;
+					while(tes[i]!=ETX){
+						datatemp.push_back(tes[i]);
+						i++;
+					}
+					data.push_back(datatemp);
 					i++;
+					string sumtemp;
+					while(tes[i]!=SOH && tes[i]!='\0'){
+						sumtemp.push_back(tes[i]);
+						i++;
+					}
+					sumarray.push_back(stoi(sumtemp));
+				}else if (tes[i] == Endfile){
+					break;
+				}else{
+					format = false;
+					perror("Format is wrong sending NAK");
 				}
-				sumarray.push_back(stoi(sumtemp));
-				//count++;
-			}else if (tes[i] == Endfile){
-				break;
-			}else{
-				format = false;
-				perror("Format is wrong sending NAK of all data`");
 			}
-		}
-		// for(int i=0; i<windowsize;i++){
-			// cout << framenum[i] <<endl;
-			// cout << data[i] <<endl;
-			// cout << sumarray[i] << endl;
-		// }
-		//cout << "fish" <<endl;
-		if(format){
-			if(tes[i]!=Endfile){
-				//cek sumarray
-				Byte * tempb;
-				unsigned temp;
-				string acknowledged;
-				for(int i = 0; i<data.size();i++){
-					tempb = stringToArrayOfBytes(data[i]);
-					temp = checksum(tempb, data[i].length(),0);
-					if(temp == sumarray[i]){
-						faultframe.push_back(true);
-						//cout << sizeof(tempb) << endl;
-					}else{
-						faultframe.push_back(false);
-						//cout << "--" << temp << "--" << tempb << "--" << i << "--" 
-					//	<< data[i].length() << "--" << data[i] 
-				//		<< "--" << sumarray[i] <<"--" << *tempb << endl;
-					}
-				}
-				if (numBytesRcvd < 0) {
-					//if error
-					printf("recvfrom() gagal!\n");
-				}
-				for(int i = 0; i<data.size();i++){
-					if(faultframe[i]){
-						acknowledged.append(data[i]);
-					}
-				}
-				//cout << acknowledged << endl;
-				//fill the circular
-				for(int i =0; i<acknowledged.length(); i++){
-					queue->data[queue->rear] = acknowledged[i];
-					queue->count++;
-					if (queue->rear < RXQSIZE-1) {
-						queue->rear++;
-					} else {
-						queue->rear = 0;
-					}
-				}
-				
-				if (tes[0] != Endfile && tes[0] != CR && tes[0] != LF) {
-					printf("\nMenerima frame ke-");
-					for (int i= 0; i<framenum.size();i++){
-						if(faultframe[i]){
-							cout << framenum[i] << " ";
+			/*
+			for(int k = 0; k<databelumdiack.size(); k++){
+				data.push_back(databelumdiack[k]);
+				framenum.push_back(framenumbelumdiack[k]);
+				sumarray.push_back(sumarraybelumdiack[k]);
+				faultframe.push_back(faultframebelumdiack[k]);	
+			}
+			*/
+			/*for(int i=0; i<data.size();i++){
+				 cout << framenum[i] <<endl;
+				 cout << data[i] <<endl;
+				 cout << sumarray[i] << endl;
+			}*/
+			if(format){
+				if(tes[i]!=Endfile){
+					//cek sumarray
+					Byte * tempb;
+					unsigned temp;
+					string acknowledged;
+					faultframe.clear();
+					for(int i = 0; i<data.size();i++){
+						tempb = stringToArrayOfBytes(data[i]);
+						temp = checksum(tempb, data[i].length(),0);
+						if(temp == sumarray[i]){
+							faultframe.push_back(true);
+						}else{
+							faultframe.push_back(false);
 						}
 					}
-					cout << endl;
-				}
-				char test[2];
-				vector<string> ack;
-				//kirim ack
-				string sendingack("");
-				for(int i =0; i<faultframe.size(); i++){
-					ack.push_back(string());
-					if(faultframe[i]){
-						ack[i].push_back(ACK);
-					}else{
-						ack[i].push_back(NAK);
+					if (numBytesRcvd < 0) {
+						//if error
+						printf("recvfrom() gagal!\n");
 					}
-					ack[i].append(to_string(framenum[i]));
-					//ack[i].append(to_string(sumarray[i]));
-					sendingack = sendingack.append(ack[i]);
-				}
-				sendingack.push_back('\0');
-				//cout << sendingack <<endl;
-				printf("Mengirim ACK.\n\n");
-				ssize_t numBytesSent = sendto(sockfd, sendingack.data(), sendingack.size(), 4,
-						(struct sockaddr *) &remaddr, sizeof(remaddr));
-				if (numBytesSent < 0)
-					printf("sendto() gagal!");
-				//if buffer size excess minimum upperlimit
-				if (queue->count > MIN_UPPERLIMIT && sent_xonxoff == XON) {
-					sent_xonxoff = XOFF;
-					send_xoff = truey;
-					send_xon = falsey;
-					printf("Buffer > minimum upperlimit.\nMengirim XOFF.\n");
-					test[0] = XOFF;
-					//send XOFF to transmitter
-					ssize_t numBytesSent = sendto(sockfd, test, sizeof(test), 4,
-						(struct sockaddr *) &remaddr, sizeof(remaddr));
-					if (numBytesSent < 0)
+					for(int i = 0; i<data.size();i++){
+						if(faultframe[i]){
+							acknowledged.append(data[i]);
+						}else{
+							break;
+						}
+					}
+					for(int i =0; i<acknowledged.length(); i++){
+						queue->data[queue->rear] = acknowledged[i];
+						queue->count++;
+						if (queue->rear < RXQSIZE-1) {
+							queue->rear++;
+						} else {
+							queue->rear = 0;
+						}
+					}
+					
+					if (tes[0] != Endfile && tes[0] != CR && tes[0] != LF) {
+						printf("\nMenerima frame benar ke-");
+						for (int i= 0; i<framenum.size();i++){
+							if(faultframe[i]){
+								cout << framenum[i] << " ";
+							}else{
+								break;
+							}
+						}
+						cout << endl;
+					}
+					char test[2];
+					vector<string> ack;
+					ack.clear();
+					string sendingack("");
+					databelumdiack.clear();
+					framenumbelumdiack.clear();
+					sumarraybelumdiack.clear();
+					faultframebelumdiack.clear();
+					for(int i =0; i<faultframe.size(); i++){
+						ack.push_back(string());
+						if(faultframe[i]){
+							ack[i].push_back(ACK);
+							ack[i].append(to_string(framenum[i]));
+							sendingack = sendingack.append(ack[i]);
+						}else{
+							ack[i].push_back(NAK);
+							ack[i].append(to_string(framenum[i]));
+							sendingack = sendingack.append(ack[i]);
+							for(int k = i+1; k<faultframe.size();k++){
+								databelumdiack.push_back(data[k]);
+								framenumbelumdiack.push_back(framenum[k]);
+								sumarraybelumdiack.push_back(sumarray[k]);
+								faultframebelumdiack.push_back(faultframe[k]);	
+							}
+							break;
+						}
+					}
+					sendingack.push_back('\0');
+					printf("Mengirim ACK.\n\n");
+					ssize_t numBytesSent = sendto(sockfd, sendingack.data(), sendingack.size(), 4,
+							(struct sockaddr *) &remaddr, sizeof(remaddr));
+					if (numBytesSent < 0){
 						printf("sendto() gagal!");
-				}
-				Byte *rt;
-				rt = stringToArrayOfBytes(acknowledged);
-				//cout << rt << ", fish, " << queue->count << endl;
-				return rt;
-			}else{
-				queue->data[queue->rear] = tes[i];
-					queue->count++;
-					if (queue->rear < RXQSIZE-1) {
-						queue->rear++;
-					} else {
-						queue->rear = 0;
 					}
+					//if buffer size excess minimum upperlimit
+					if (queue->count > MIN_UPPERLIMIT && sent_xonxoff == XON) {
+						sent_xonxoff = XOFF;
+						send_xoff = truey;
+						send_xon = falsey;
+						printf("Buffer > minimum upperlimit.\nMengirim XOFF.\n");
+						test[0] = XOFF;
+						//send XOFF to transmitter
+						ssize_t numBytesSent = sendto(sockfd, test, sizeof(test), 4,
+							(struct sockaddr *) &remaddr, sizeof(remaddr));
+						if (numBytesSent < 0)
+							printf("sendto() gagal!");
+					}
+					//Byte *rt;
+					//rt = stringToArrayOfBytes(acknowledged);
+					//return rt;
+				}else{
+					queue->data[queue->rear] = tes[i];
+						queue->count++;
+						if (queue->rear < RXQSIZE-1) {
+							queue->rear++;
+						} else {
+							queue->rear = 0;
+						}
+					break;
+				}
+			}else{
+				cout << "Format Error quitting..." << endl;
+				exit(0);
+				Byte * rt;
+				string error = "error";
+				rt = stringToArrayOfBytes(error);
+				return rt;
 			}
-		}else{
-			Byte * rt;
-			string error = "error";
-			rt = stringToArrayOfBytes(error);
-			return rt;
 		}
-		
+		Byte * rt;
+		string error = "1";
+		rt = stringToArrayOfBytes(error);
+		return rt;
 	} else {
 		//cout << "catburn"<< endl;
 		Byte * rt;
@@ -392,4 +429,14 @@ Byte * stringToArrayOfBytes(string a){
 	}
 	result[a.length()]= '\0';  
 	return result;
+}
+bool checkack(std::vector<bool> ack){
+	for(int i =0; i<ack.size(); i++){
+		if(!ack[i]){
+			//cout << "false" << i <<endl;
+			return false;
+		}
+		//cout << "true, " << i <<endl;
+	}
+	return true;
 }

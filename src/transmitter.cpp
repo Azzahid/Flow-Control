@@ -110,7 +110,7 @@ int main(int argc, char *argv[])
 						while(true){
 							if(recvfrom(fd,x,sizeof(x), 0, (struct sockaddr *)&remaddr, &addrlen)>0){
 								if(*x == XON){
-									printf("XON Diterima\n");
+									printf("XON Diterima\n\n");
 									break;
 								}
 							}else{
@@ -166,6 +166,7 @@ int main(int argc, char *argv[])
 				sumarray[m] = to_string(tmpsum);
 				//cout <<"isi tmp " << tmp << endl;
 			}
+			//sumarray[10] = "12";
 			//make message
 			for(int m=0; m<totalframe;m++){
 				msg[m].push_back(SOH);
@@ -210,8 +211,9 @@ int main(int argc, char *argv[])
 				//wait ack
 				Byte x [5*windowsize];
 				struct timeval t;
-			    if(framenum-1 <= windowsize)
+			    if(framenum-1 <= windowsize){
 			    	sleep(1);
+			    }
 				vector<bool> faultframe;
 				faultframe.push_back(false);
 				while(!checkack(faultframe)){
@@ -258,8 +260,21 @@ int main(int argc, char *argv[])
 						}
 						for(i = 0; i<faultframe.size();i++){
 							if(!faultframe[i]){
-								datas.append(msg[faultnum[i]]);
 								cout << faultnum[i] << " ";
+								/*Byte * tmpx;
+								unsigned tmpsumx;
+								tmpx = stringToArrayOfBytes(arrframe[faultnum[i]-1]);
+								tmpsumx = checksum(tmpx, arrframe[faultnum[i]-1].length(),0);
+								sumarray[faultnum[i]-1] = to_string(tmpsumx);
+								msg[faultnum[i]-1].clear();
+								msg[faultnum[i]-1].push_back(SOH);
+								msg[faultnum[i]-1].append(to_string(faultnum[i]-1+1));
+								msg[faultnum[i]-1].push_back(STX);
+								msg[faultnum[i]-1].append(arrframe[faultnum[i]-1]);
+								msg[faultnum[i]-1].push_back(ETX);
+								msg[faultnum[i]-1].append(sumarray[faultnum[i]-1]);*/
+								datas.append(msg[faultnum[i]-1]);
+								break;
 							}
 							ack[faultnum[i]-1] = faultframe[i];
 						}
@@ -269,7 +284,7 @@ int main(int argc, char *argv[])
 						cout << endl;
 					}else if(ackrecv<0){
 						for(i = numinit; i<framenum;i++){
-							if(i < totalframe){
+							if(i < totalframe && ack[i]){
 								datas.append(msg[i]);
 							}
 						}
@@ -277,7 +292,7 @@ int main(int argc, char *argv[])
 						cout << "Timeout: send all" <<endl;
 					}
 					if(datas.size()>1){
-						//cout << "Sending window" << datas << endl;
+						cout << "Re-Sending window" << datas << endl;
 						if(sendto(fd, datas.data(), datas.size(),0,(struct sockaddr *)&remaddr, slen)<0){
 							cout << "error" << endl;
 						}

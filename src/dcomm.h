@@ -24,7 +24,7 @@
 /* Const */
 #define BYTESIZE 256 /* The maximum value of a byte */
 #define MAXLEN 1024 /* Maximum messages length */
-#define framesize 1
+#define framesize 2
 
 typedef enum { falsey =0, truey } Boolean;
 
