@@ -110,7 +110,7 @@ int main(int argc, char *argv[])
 						while(true){
 							if(recvfrom(fd,x,sizeof(x), 0, (struct sockaddr *)&remaddr, &addrlen)>0){
 								if(*x == XON){
-									printf("XON Diterima\n\n");
+									printf("XON Diterima\n");
 									break;
 								}
 							}else{
@@ -166,7 +166,7 @@ int main(int argc, char *argv[])
 				sumarray[m] = to_string(tmpsum);
 				//cout <<"isi tmp " << tmp << endl;
 			}
-			//sumarray[10] = "12";
+			sumarray[10] = "12";
 			//make message
 			for(int m=0; m<totalframe;m++){
 				msg[m].push_back(SOH);
@@ -261,7 +261,7 @@ int main(int argc, char *argv[])
 						for(i = 0; i<faultframe.size();i++){
 							if(!faultframe[i]){
 								cout << faultnum[i] << " ";
-								/*Byte * tmpx;
+								Byte * tmpx;
 								unsigned tmpsumx;
 								tmpx = stringToArrayOfBytes(arrframe[faultnum[i]-1]);
 								tmpsumx = checksum(tmpx, arrframe[faultnum[i]-1].length(),0);
@@ -272,7 +272,7 @@ int main(int argc, char *argv[])
 								msg[faultnum[i]-1].push_back(STX);
 								msg[faultnum[i]-1].append(arrframe[faultnum[i]-1]);
 								msg[faultnum[i]-1].push_back(ETX);
-								msg[faultnum[i]-1].append(sumarray[faultnum[i]-1]);*/
+								msg[faultnum[i]-1].append(sumarray[faultnum[i]-1]);
 								datas.append(msg[faultnum[i]-1]);
 								break;
 							}

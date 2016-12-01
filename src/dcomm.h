@@ -5,9 +5,9 @@
 #define _DCOMM_H_
 
 /* ASCII Const */
-#define SOH 1 /* Start of Header Character */
-#define STX 2 /* Start of Text Character */
-#define ETX 3 /* End of Text Character */
+#define SOH 0x01 /* Start of Header Character */
+#define STX 0x02 /* Start of Text Character */
+#define ETX 0x03 /* End of Text Character */
 #define ENQ 5 /* Enquiry Character */
 #define ACK 6 /* Acknowledgement */
 #define BEL 7 /* Message Error Warning */
@@ -24,6 +24,7 @@
 /* Const */
 #define BYTESIZE 256 /* The maximum value of a byte */
 #define MAXLEN 1024 /* Maximum messages length */
+#define framesize 2
 
 typedef enum { falsey =0, truey } Boolean;
 
@@ -40,10 +41,11 @@ typedef struct QTYPE
 typedef struct MESGB
 {
 	unsigned int soh;
+	int framenum;
 	unsigned int stx;
-	unsigned int etx;
-	Byte checksum;
-	Byte msgno;
 	Byte *data;
+	unsigned int etx;
+	Byte * checksum;
 } MESGB;
+
 #endif
